@@ -1,162 +1,236 @@
 # 🤝 Pharos Agent Escrow
 
 > Trustless, agent-to-agent **escrowed payments** on Pharos. The missing payment primitive for an
-> autonomous agent economy — packaged as a reusable Skill that any AI agent can call.
+> autonomous agent economy — packaged as a reusable **Agent Skill** that any AI agent (Claude Code,
+> Codex, Antigravity, Cursor…) can install and call in plain language.
 
 **Pharos "Skill-to-Agent Dual Cascade" Hackathon · Phase 1 (Skill Hackathon)**
 
-|                                      |                                                                                                                                   |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| 🟢**Live on Atlantic testnet** | [`0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB`](https://atlantic.pharosscan.xyz/address/0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB) |
-| ✅**Source verified**          | on Pharosscan (Blockscout)                                                                                                        |
-| 🧪**Tests**                    | 22 / 22 passing (`forge test`)                                                                                                  |
-| 🔐**Token**                    | native**PHRS**                                                                                                              |
-| 📦**Format**                   | official Pharos Skill Engine layout (`SKILL.md` + `references/` + `assets/`)                                                |
+|                      |                                                                                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 🟢 **Live testnet hub** | [`0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB`](https://atlantic.pharosscan.xyz/address/0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB) |
+| ✅ **Source verified**  | on Pharosscan (Blockscout)                                                                                                        |
+| 🧪 **Tests**           | 22 / 22 passing (`forge test`)                                                                                                    |
+| 🔐 **Token**           | native **PHRS** (Atlantic testnet)                                                                                                 |
+| 📦 **Standard**        | open `SKILL.md` Agent-Skill format — installable with `npx skills add`                                                            |
+| ⚙️ **Engine**          | runs `cast` / `forge` (Foundry) under the hood                                                                                     |
 
 ---
 
-## The problem
+## What it does
 
-Pharos is built to power an **AI agent economy** — agents that transact, hire each other, and move
-value autonomously. But agent-to-agent commerce has a trust gap: if agent A pays agent B upfront, B
-can vanish; if B works first, A can refuse to pay. A simple transfer can't solve this.
+A **client** locks PHRS for a chosen **worker** against a delivery deadline. The worker delivers,
+the client releases payment — and the smart contract guarantees neither side can cheat. One
+`AgentEscrow` **hub** serves the whole ecosystem (many jobs, each keyed by `jobId`).
 
-**Escrow is the foundational primitive that closes that gap** — and it's exactly what a Phase 2
-"agent marketplace" needs underneath it.
+- **Create & fund** an escrow job that hires a worker for an agreed amount of PHRS (`createJob`).
+- **Hold funds in the contract** — not in either party's wallet — until the job is settled.
+- **Submit work** by recording an on-chain content hash of the deliverable (`submitWork`).
+- **Approve & release** payment to the worker; irreversible once approved (`approve`).
+- **Refund** the client automatically if the worker misses the deadline (`refund`).
+- **Self-claim** for the worker if the client disappears after delivery, once a review window
+  elapses (`claim`) — so a client can't take the work and never pay.
+- **Query** a job's full status, state, time-to-deadline, and auto-release countdown (`getJob`,
+  `stateOf`, `timeToDeadline`, `timeToAutoRelease`, `jobCount`) — no key needed.
+- **Read history** of every job created / paid / refunded via on-chain events (`cast logs`).
+- **Deploy your own hub** on Pharos in one command, or reuse the verified shared hub.
 
-## The solution
+It is **two-sided**: the same skill serves both the hiring agent (client) and the working agent
+(worker). In an agent economy one agent plays both roles at different times.
 
-`AgentEscrow` is a single on-chain **hub** that holds a client's PHRS until a job is done:
-
-1. **Client** locks PHRS for a chosen **worker**, with a delivery **deadline**.
-2. **Worker** delivers off-chain work and records a **content hash** on-chain (`submitWork`).
-3. **Client** approves and the funds are **released** to the worker (`approve`).
-4. Safety valves: if the worker misses the deadline the client can **refund**; if the client ghosts
-   after delivery, the worker can **claim** once a review window passes. Neither side can trap the other.
-
-It ships as a **Skill** — a folder (`SKILL.md` + `references/escrow.md` + `assets/`) that teaches an
-AI agent (e.g. Claude Code) to deploy and operate the contract through Foundry (`cast`/`forge`),
-driven entirely by natural language.
-
-## What is a "Pharos Skill"?
-
-Not an SDK or a framework — it's an **Agent Skill package** in the official
-[`pharos-skill-engine`](https://github.com/PharosNetwork/pharos-skill-engine) format. The agent reads
-`SKILL.md`, matches the user's intent in the **Capability Index**, opens the linked section of
-`references/escrow.md`, and runs the documented `cast`/`forge` command. This skill follows that exact
-standard, so it drops straight into the engine alongside the built-in capabilities.
-
-## Architecture
+### State machine
 
 ```
-        Natural language ("hire 0xBob for 0.1 PHRS, deadline 1h")
-                              │
-                              ▼
-   ┌───────────────────────────────────────────────┐
-   │  SKILL.md  →  Capability Index (intent → ref)  │
-   └───────────────────────────────────────────────┘
-                              │
-                              ▼
-   ┌───────────────────────────────────────────────┐
-   │  references/escrow.md                          │
-   │  command template · params · output · errors   │
-   └───────────────────────────────────────────────┘
-                              │  cast / forge
-                              ▼
-   ┌───────────────────────────────────────────────┐
-   │  AgentEscrow hub  @ Pharos Atlantic testnet    │
-   │  createJob · submitWork · approve · refund ·    │
-   │  claim · getJob · events                        │
-   └───────────────────────────────────────────────┘
+   createJob              submitWork                 approve / claim
+  ───────────►  Funded  ───────────►  Delivered  ───────────────────►  Released ✅
+                  │                       
+       deadline   │ refund (worker never delivered)                    
+       passed     ▼                       
+              Refunded 🔄
 ```
 
-### Escrow state machine
+---
 
-```
-   createJob              submitWork                 approve
-  ───────────►  Funded  ───────────►  Delivered  ───────────►  Released
-                  │                       │
-       deadline   │ refund          claim │ (after review window)
-       passed,    ▼                       ▼
-       no deliver Refunded            Released
-```
+## Installation
 
-## Contract API (`assets/escrow/AgentEscrow.sol`)
+### Option A — one command (recommended)
 
-| Function                                                             | Who    | Effect                                              |
-| -------------------------------------------------------------------- | ------ | --------------------------------------------------- |
-| `createJob(worker, deadline, reviewWindow) payable → jobId`       | client | Lock PHRS, open a job                               |
-| `submitWork(jobId, deliverableHash)`                               | worker | Record delivery, start review window                |
-| `approve(jobId)`                                                   | client | Release funds to worker (irreversible)              |
-| `refund(jobId)`                                                    | client | Reclaim funds after a missed deadline               |
-| `claim(jobId)`                                                     | worker | Self-claim after the review window if client ghosts |
-| `getJob / stateOf / timeToDeadline / timeToAutoRelease / jobCount` | anyone | Read-only views                                     |
-
-Events (all indexed for `cast logs`): `JobCreated`, `WorkSubmitted`, `Released`, `Refunded`.
-
-## Quickstart
-
-### Use the skill with Claude Code
+The skill follows the open `SKILL.md` standard, so the [Vercel `skills` CLI](https://github.com/vercel-labs/skills)
+installs it into whatever agent you have (Claude Code, Codex, Antigravity, Cursor, …). It
+auto-detects your installed agents and copies the files to the right place:
 
 ```bash
-# 1. Install Foundry (the skill needs cast/forge)
-curl -L https://foundry.paradigm.xyz | bash && foundryup
-
-# 2. Fund a throwaway testnet wallet and export its key
-cp .env.example .env        # then edit .env and set PRIVATE_KEY
-export PRIVATE_KEY=0x...
-
-# 3. Point Claude Code at this skill folder and just ask:
-#   "Deploy the AgentEscrow hub on Pharos"
-#   "Create an escrow job hiring 0xBob for 0.05 PHRS with a 2 hour deadline"
-#   "Submit work for job 3, deliverable ipfs://bafy..."
-#   "Approve and release payment for job 3"
-#   "What's the status of job 3?"
+npx skills add https://github.com/mrarindam/pharos-agent-escrow
 ```
 
-The agent resolves each request to the correct `cast`/`forge` call via `references/escrow.md`.
+### Option B — manual install (copy the folder)
 
-### Build, test, deploy directly
+A skill is just a folder: `SKILL.md` + `references/` + `assets/`. Copy it into your agent's skills
+directory:
+
+| Agent          | Global skills directory                          | Invoke with        |
+| -------------- | ------------------------------------------------ | ------------------ |
+| **Claude Code** | `~/.claude/skills/pharos-agent-escrow/`          | auto, or `/pharos-agent-escrow` |
+| **Codex CLI**   | `~/.codex/skills/pharos-agent-escrow/`           | auto, or `$pharos-agent-escrow` (restart session) |
+| **Antigravity** | `~/.gemini/antigravity-cli/skills/pharos-agent-escrow/` | auto, or mention by name |
 
 ```bash
-forge install foundry-rs/forge-std
-forge build
-forge test -vv                                   # 22 passing
-
-forge script script/DeployAgentEscrow.s.sol:DeployAgentEscrow \
-  --rpc-url https://atlantic.dplabs-internal.com \
-  --private-key $PRIVATE_KEY --broadcast
+# example for Claude Code
+git clone https://github.com/mrarindam/pharos-agent-escrow
+mkdir -p ~/.claude/skills/pharos-agent-escrow
+cp -r pharos-agent-escrow/SKILL.md pharos-agent-escrow/references pharos-agent-escrow/assets \
+      ~/.claude/skills/pharos-agent-escrow/
 ```
 
-## Live deployment & demo
+### Prerequisites
 
-- **Hub (verified):** [`0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB`](https://atlantic.pharosscan.xyz/address/0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB)
-- **Network:** Pharos Atlantic testnet (chainId `688689`, native `PHRS`)
-- **Full on-chain run** (createJob → submitWork → approve, with tx links): see
-  [`examples/agent-to-agent-demo.md`](examples/agent-to-agent-demo.md)
+The skill drives Foundry, so you need it once (the skill will also install it for you if missing):
 
-## Security
+```bash
+curl -L https://foundry.paradigm.xyz | bash && foundryup    # installs cast + forge
+```
 
-Built to pass the CertiK *Skill Scanner* (an official judging standard). Highlights: Checks-Effects-
-Interactions + reentrancy guard, no owner/admin/`selfdestruct`/`delegatecall`, funds can only return
-to the client or go to the designated worker, private keys never printed or committed. Full self-audit
-in [`SECURITY.md`](SECURITY.md).
+For **write** operations (create / approve / refund / claim / deploy) export a funded **testnet**
+key. Read-only queries need nothing.
+
+```bash
+export PRIVATE_KEY=0xyour_testnet_private_key                 # use a throwaway testnet key
+```
+
+> 🪟 **Windows:** run all commands in **Git Bash** (not PowerShell — `export` is a Bash builtin).
+
+---
+
+## Usage
+
+### Talk to it in plain language (after install)
+
+Just describe what you want; the agent maps it to the right command via `references/escrow.md`:
+
+```
+Create an escrow job hiring 0x5d7Aaf…4494 for 0.01 PHRS with a 1 hour deadline on Pharos.
+Submit work for job 4, deliverable ipfs://bafy…
+Approve and release payment for job 4.
+What's the status and countdown of job 4?
+Refund my escrow for job 4 — the worker missed the deadline.
+```
+
+### Or run the underlying commands directly
+
+```bash
+RPC=https://atlantic.dplabs-internal.com
+HUB=0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB
+
+# create & fund a job (client signs, locks 0.01 PHRS, 1h deadline, 1d review window)
+DEADLINE=$(($(date +%s)+3600))
+cast send $HUB "createJob(address,uint64,uint64)" 0xWORKER $DEADLINE 86400 \
+  --value 0.01ether --private-key $PRIVATE_KEY --rpc-url $RPC
+
+# check status — no key required
+cast call $HUB "getJob(uint256)(address,address,uint256,uint64,uint64,uint64,uint8,bytes32)" 4 --rpc-url $RPC
+
+# release payment to the worker (client signs)
+cast send $HUB "approve(uint256)" 4 --private-key $PRIVATE_KEY --rpc-url $RPC
+```
+
+### Capability reference
+
+| Capability | Command | Who | Key? |
+| --- | --- | --- | --- |
+| Deploy a hub | `forge script DeployAgentEscrow` | anyone | ✅ |
+| Create & fund a job | `createJob(worker, deadline, reviewWindow)` `--value` | client | ✅ |
+| Submit work | `submitWork(jobId, deliverableHash)` | worker | ✅ |
+| Release payment | `approve(jobId)` | client | ✅ |
+| Refund after missed deadline | `refund(jobId)` | client | ✅ |
+| Self-claim after review window | `claim(jobId)` | worker | ✅ |
+| Read job status / countdown | `getJob` / `stateOf` / `timeToDeadline` / `timeToAutoRelease` | anyone | ❌ |
+| Read history | `cast logs` (JobCreated / WorkSubmitted / Released / Refunded) | anyone | ❌ |
+
+---
+
+## Example — a real on-chain run
+
+Live `createJob → submitWork → approve` on Atlantic testnet (full tx links in
+[`examples/agent-to-agent-demo.md`](examples/agent-to-agent-demo.md)):
+
+```
+STEP 1  createJob   →  state 1 (Funded)    hub holds 0.001 PHRS, worker wallet UNCHANGED
+STEP 2  submitWork  →  state 2 (Delivered) worker records deliverable hash
+STEP 3  approve     →  state 3 (Released)  worker wallet +0.001 PHRS, hub balance 0
+```
+
+And the worker-protection path (client never approves):
+
+```
+submitWork  →  Delivered, review window starts
+timeToAutoRelease: 35s → 24s …            (live countdown)
+claim (too early)  →  reverted: "Review window open"   🚫
+…window elapses…   →  timeToAutoRelease: 0
+claim              →  state 3 (Released)  worker self-claims the payment   ✅
+```
+
+---
+
+## Supported networks
+
+| Network | name | chainId | native token | RPC |
+| --- | --- | --- | --- | --- |
+| **Atlantic testnet** (default) | `atlantic-testnet` | `688689` | **PHRS** | `https://atlantic.dplabs-internal.com` |
+| **Pharos mainnet** | `mainnet` | `1672` | **PROS** | `https://rpc.pharos.xyz` |
+
+Network config lives in [`assets/networks.json`](assets/networks.json). Testnet is used unless you
+say `mainnet`; mainnet writes require an explicit re-confirmation.
+
+## Dependencies
+
+- **Foundry** (`cast` + `forge`) — the only hard dependency; auto-installed by the skill if missing.
+- **A wallet private key** — only for write operations, supplied via `$PRIVATE_KEY`. Read/query
+  operations need nothing.
+- No npm packages, no SDK, no wallet browser extension.
+
+---
+
+## Security & Safety
+
+This is a **payment** skill, so it is built to be auditable and to handle keys responsibly. It is
+designed to pass the CertiK *Skill Scanner* (an official judging standard). Full self-audit in
+[`SECURITY.md`](SECURITY.md).
+
+- **Read vs write** — querying status/history needs **no key**. Only `create / approve / refund /
+  claim / deploy` need a key.
+- **Keys never leave your machine** — the key is read from `$PRIVATE_KEY`, passed straight to
+  `cast`/`forge` to sign locally, and is **never printed, logged, committed, or sent to any server**.
+  No wallet connection, no seed phrases, no browser automation.
+- **The only network endpoints** are the Pharos RPC and the Pharos explorer's verification API
+  (both declared in `assets/networks.json`). No telemetry, no third-party calls.
+- **Contract safety** — Checks-Effects-Interactions + a reentrancy guard on every payout; no
+  `owner`/admin, no `selfdestruct`, no `delegatecall`, no upgradeability. Funds can only ever go
+  **back to the client** (refund) or **to the designated worker** (release/claim) — there is no path
+  to any third party, and no admin withdrawal.
+- **Network confirmation** — the agent always states the target network before a write, and warns
+  prominently before any mainnet operation.
+
+> ⚠️ Use a **dedicated testnet wallet** with only test funds. As with any agent skill, review the
+> `SKILL.md` before installing — skills are instructions an agent will follow.
+
+---
 
 ## Composability — what Phase 2 agents can build on this
 
 Because the hub is a shared, deployed primitive, agents just point at its address:
 
-- **Agent marketplace** — a broker agent posts jobs, escrows payment, and pays on delivery.
-- **Freelance/bounty agent** — humans or agents claim bounties; payout is trustless.
-- **Pay-per-task data/compute agent** — pairs naturally with Pharos `x402` for metered work.
-- **Milestone manager** — one client funds several workers across parallel jobs in one hub.
+- **Agent marketplace** — a broker agent posts jobs, escrows payment, pays on delivery.
+- **Freelance / bounty agent** — humans or agents claim bounties; payout is trustless.
+- **Pay-per-task data/compute agent** — pairs with Pharos `x402` (instant micro-payments) for the
+  small calls, and uses this escrow for the larger, delivery-based jobs.
+- **Milestone manager** — one client funds several workers across parallel jobs in a single hub.
 
 ## Repository layout
 
 ```
 pharos-agent-escrow/
 ├── SKILL.md                     # agent entry point + Capability Index
-├── references/escrow.md         # per-operation command specs
+├── references/escrow.md         # per-operation command specs (templates, params, errors)
 ├── assets/
 │   ├── networks.json            # Pharos RPC / chainId / explorer
 │   └── escrow/AgentEscrow.sol   # the skill's contract (source of truth)
@@ -168,6 +242,17 @@ pharos-agent-escrow/
 └── foundry.toml
 ```
 
+## Live deployment
+
+- **Hub (verified):** [`0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB`](https://atlantic.pharosscan.xyz/address/0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB)
+- **Network:** Pharos Atlantic testnet (chainId `688689`, native `PHRS`)
+- Reuse it directly, or deploy your own with `forge script script/DeployAgentEscrow.s.sol`.
+
 ## License
 
 MIT.
+
+---
+
+*Built for the Pharos Skill-to-Agent Dual Cascade Hackathon. Follows the open `SKILL.md` Agent-Skill
+standard — installable with `npx skills add` across Claude Code, Codex, Antigravity, and Cursor.*

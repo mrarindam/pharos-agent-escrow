@@ -1,17 +1,17 @@
-# 🤝 Agent Escrow — a Pharos Skill
+# 🤝 Pharos Agent Escrow
 
 > Trustless, agent-to-agent **escrowed payments** on Pharos. The missing payment primitive for an
 > autonomous agent economy — packaged as a reusable Skill that any AI agent can call.
 
 **Pharos "Skill-to-Agent Dual Cascade" Hackathon · Phase 1 (Skill Hackathon)**
 
-| | |
-|---|---|
-| 🟢 **Live on Atlantic testnet** | [`0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB`](https://atlantic.pharosscan.xyz/address/0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB) |
-| ✅ **Source verified** | on Pharosscan (Blockscout) |
-| 🧪 **Tests** | 22 / 22 passing (`forge test`) |
-| 🔐 **Token** | native **PHRS** |
-| 📦 **Format** | official Pharos Skill Engine layout (`SKILL.md` + `references/` + `assets/`) |
+|                                      |                                                                                                                                   |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| 🟢**Live on Atlantic testnet** | [`0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB`](https://atlantic.pharosscan.xyz/address/0x10B1A5680F95b81c9cC8E87a9780f7ceE32f36fB) |
+| ✅**Source verified**          | on Pharosscan (Blockscout)                                                                                                        |
+| 🧪**Tests**                    | 22 / 22 passing (`forge test`)                                                                                                  |
+| 🔐**Token**                    | native**PHRS**                                                                                                              |
+| 📦**Format**                   | official Pharos Skill Engine layout (`SKILL.md` + `references/` + `assets/`)                                                |
 
 ---
 
@@ -83,20 +83,21 @@ standard, so it drops straight into the engine alongside the built-in capabiliti
 
 ## Contract API (`assets/escrow/AgentEscrow.sol`)
 
-| Function | Who | Effect |
-|---|---|---|
-| `createJob(worker, deadline, reviewWindow) payable → jobId` | client | Lock PHRS, open a job |
-| `submitWork(jobId, deliverableHash)` | worker | Record delivery, start review window |
-| `approve(jobId)` | client | Release funds to worker (irreversible) |
-| `refund(jobId)` | client | Reclaim funds after a missed deadline |
-| `claim(jobId)` | worker | Self-claim after the review window if client ghosts |
-| `getJob / stateOf / timeToDeadline / timeToAutoRelease / jobCount` | anyone | Read-only views |
+| Function                                                             | Who    | Effect                                              |
+| -------------------------------------------------------------------- | ------ | --------------------------------------------------- |
+| `createJob(worker, deadline, reviewWindow) payable → jobId`       | client | Lock PHRS, open a job                               |
+| `submitWork(jobId, deliverableHash)`                               | worker | Record delivery, start review window                |
+| `approve(jobId)`                                                   | client | Release funds to worker (irreversible)              |
+| `refund(jobId)`                                                    | client | Reclaim funds after a missed deadline               |
+| `claim(jobId)`                                                     | worker | Self-claim after the review window if client ghosts |
+| `getJob / stateOf / timeToDeadline / timeToAutoRelease / jobCount` | anyone | Read-only views                                     |
 
 Events (all indexed for `cast logs`): `JobCreated`, `WorkSubmitted`, `Released`, `Refunded`.
 
 ## Quickstart
 
 ### Use the skill with Claude Code
+
 ```bash
 # 1. Install Foundry (the skill needs cast/forge)
 curl -L https://foundry.paradigm.xyz | bash && foundryup
@@ -112,9 +113,11 @@ export PRIVATE_KEY=0x...
 #   "Approve and release payment for job 3"
 #   "What's the status of job 3?"
 ```
+
 The agent resolves each request to the correct `cast`/`forge` call via `references/escrow.md`.
 
 ### Build, test, deploy directly
+
 ```bash
 forge install foundry-rs/forge-std
 forge build
@@ -151,7 +154,7 @@ Because the hub is a shared, deployed primitive, agents just point at its addres
 ## Repository layout
 
 ```
-agent-escrow-skill/
+pharos-agent-escrow/
 ├── SKILL.md                     # agent entry point + Capability Index
 ├── references/escrow.md         # per-operation command specs
 ├── assets/
@@ -168,8 +171,3 @@ agent-escrow-skill/
 ## License
 
 MIT.
-
----
-
-*Built for the Pharos Skill-to-Agent Dual Cascade Hackathon. Follows the official
-[pharos-skill-engine](https://github.com/PharosNetwork/pharos-skill-engine) skill standard.*

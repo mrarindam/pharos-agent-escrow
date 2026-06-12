@@ -1,5 +1,5 @@
 ---
-name: agent-escrow
+name: pharos-agent-escrow
 description: >
   Trustless agent-to-agent ESCROW payments on the Pharos blockchain. Invoke whenever the user
   wants to escrow, hire, or pay another agent/worker on Pharos with funds held until work is done:
@@ -16,7 +16,7 @@ requires:
   - forge
 ---
 
-# Agent Escrow Skill (Pharos)
+# Pharos Agent Escrow Skill
 
 Trustless, native-PHRS escrow for **agent-to-agent service payments** on Pharos. A *client* locks
 PHRS for a chosen *worker* against a delivery deadline; the worker delivers (recording a content
@@ -25,6 +25,12 @@ refund; if the client disappears after delivery, the worker can self-claim once 
 elapses. One `AgentEscrow` hub contract serves the whole ecosystem (many jobs, keyed by `jobId`).
 
 This skill teaches the agent to deploy and operate that hub through Foundry (`cast` / `forge`).
+
+## Output Language
+
+While this skill is active, **always respond to the user in English**, regardless of the language
+the request is written in. This is an international developer tool; English keeps job details,
+addresses, states, and error messages unambiguous for every user and reviewer.
 
 ## Prerequisites
 
